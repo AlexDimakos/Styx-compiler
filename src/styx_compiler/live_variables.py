@@ -40,8 +40,9 @@ class CollectLiveVariablesTransferFunctions(cst.CSTVisitor):
             if result is not None:
                 return result
         if m.matches(target, m.Subscript()):
-            target: cst.Subscript = cst.ensure_type(target, cst.Subscript)
-            return self._get_lhs_names(target.value)
+            # target: cst.Subscript = cst.ensure_type(target, cst.Subscript)
+            # Don't return the name of the target.value, since only the subscripted part is written to
+            return []
         if m.matches(target, m.StarredElement() | m.Element()):
             return self._get_lhs_names(target.value)
         if m.matches(target, m.Name()):
@@ -94,12 +95,6 @@ class CollectLiveVariablesTransferFunctions(cst.CSTVisitor):
         self._tfs[Node(index, 0)] = lambda lives, names=names: lives.difference(names)
 
     def visit_Name(self, node: cst.Name) -> bool | None:
-        index = self._provider.get_metadata(IndexProvider, node)
-        result = self.resolve_name(node)
-        if result is not None:
-            self._tfs[Node(index, 0)] = lambda lives, names=result: lives.union(names)
-
-    def visit_Attribute(self, node: cst.Attribute) -> bool | None:
         index = self._provider.get_metadata(IndexProvider, node)
         result = self.resolve_name(node)
         if result is not None:

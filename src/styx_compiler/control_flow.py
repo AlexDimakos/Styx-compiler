@@ -630,18 +630,22 @@ class ComputeControlFlowGraph(cst.CSTVisitor):
             expression: cst.Subscript = cst.ensure_type(expression, cst.Subscript)
             prev = self._visit_expression(expression.value, instance, prev, context)
             for element in expression.slice:
-                if m.matches(element, m.Index()):
-                    element: cst.Index = cst.ensure_type(element, cst.Index)  # noqa: PLW2901
+                baseslice: cst.BaseSlice = cst.ensure_type(element, cst.SubscriptElement).slice
+                if m.matches(baseslice, m.Index()):
+                    element: cst.Index = cst.ensure_type(baseslice, cst.Index)  # noqa: PLW2901
                     prev = self._visit_expression(element.value, instance, prev)
                     prev = self._make_cfg_node(element, instance, prev)  # Index
-                elif m.matches(element, m.Slice()):
-                    element: cst.Slice = cst.ensure_type(element, cst.Slice)  # noqa: PLW2901
-                    prev = self._visit_expression(element.lower, instance, prev)
-                    prev = self._visit_expression(element.upper, instance, prev)
-                    prev = self._visit_expression(element.step, instance, prev)
+                elif m.matches(baseslice, m.Slice()):
+                    element: cst.Slice = cst.ensure_type(baseslice, cst.Slice)  # noqa: PLW2901
+                    if element.lower is not None:
+                        prev = self._visit_expression(element.lower, instance, prev)
+                    if element.upper is not None:
+                        prev = self._visit_expression(element.upper, instance, prev)
+                    if element.step is not None:
+                        prev = self._visit_expression(element.step, instance, prev)
                     prev = self._make_cfg_node(element, instance, prev)  # Slice
                 else:
-                    msg = f"Unknown subscript element type {element}"
+                    msg = f"Unknown BaseSlice type {baseslice}"
                     raise RuntimeError(msg)
             prev = self._make_cfg_node(expression, instance, prev)  # Subscript
         else:
