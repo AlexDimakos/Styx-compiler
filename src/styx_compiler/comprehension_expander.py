@@ -3,15 +3,34 @@ Comprehension-to-loop expander.
 """
 
 import libcst as cst
+import libcst.matchers as m
+
+
+def find_gather_spread_comps(node: cst.CSTNode) -> set[int]:
+    """Return ids of comprehensions used as the spread arg of `gather(*<comp>)`.
+
+    Those must stay intact so the processor can fan them out in parallel rather
+    than serializing them into an accumulator + for-loop.
+    """
+    skip: set[int] = set()
+    for call in m.findall(node, m.Call(func=m.Name("gather"))):
+        for arg in call.args:
+            if arg.star == "*" and isinstance(arg.value, (cst.ListComp, cst.SetComp, cst.GeneratorExp)):
+                skip.add(id(arg.value))
+    return skip
 
 
 class OutermostCompFinder(cst.CSTVisitor):
     """Finds the first (outermost) comprehension in a node to preserve nested scoping."""
 
-    def __init__(self) -> None:
+    def __init__(self, skip_ids: set[int] | None = None) -> None:
         self.target: cst.CSTNode | None = None
+        self._skip_ids = skip_ids or set()
 
     def _check_and_stop(self, node: cst.CSTNode) -> bool:
+        # Skipped comps (e.g. `gather(*<comp>)`) keep descending so inner comps still get found.
+        if id(node) in self._skip_ids:
+            return True
         if self.target is None:
             self.target = node
         return False  # Always stop traversing children so we only get the outermost
@@ -141,7 +160,9 @@ class ComprehensionExpander(cst.CSTTransformer):
             new_body = []
 
             for stmt in current_body:
-                finder = OutermostCompFinder()
+                # `gather(*<comp>)` keeps its comp intact for runtime fan-out.
+                skip_ids = find_gather_spread_comps(stmt)
+                finder = OutermostCompFinder(skip_ids=skip_ids)
                 stmt.visit(finder)
 
                 if finder.target:

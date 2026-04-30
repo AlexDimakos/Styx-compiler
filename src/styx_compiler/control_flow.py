@@ -587,10 +587,15 @@ class ComputeControlFlowGraph(cst.CSTVisitor):
         ## Literal Values
         elif m.matches(expression, m.Ellipsis()):
             pass
-        elif m.matches(expression, m.Integer() | m.Float() | m.Imaginary() | m.SimpleString() | m.ConcatenatedString()):
-            prev = self._make_cfg_node(
-                expression, instance, prev
-            )  # Integer, Float, Imaginary, SimpleString, ConcatenatedString
+        elif m.matches(expression, m.Integer() | m.Float() | m.Imaginary() | m.SimpleString()):
+            prev = self._make_cfg_node(expression, instance, prev)  # Integer, Float, Imaginary, SimpleString
+        elif m.matches(expression, m.ConcatenatedString()):
+            # Implicit concatenation like `"a" f"{x}"`. Visit left and right so
+            # any embedded expressions inside FormattedString parts are seen as reads.
+            expression: cst.ConcatenatedString = cst.ensure_type(expression, cst.ConcatenatedString)
+            prev = self._visit_expression(expression.left, instance, prev, context)
+            prev = self._visit_expression(expression.right, instance, prev, context)
+            prev = self._make_cfg_node(expression, instance, prev)  # ConcatenatedString
         elif m.matches(expression, m.FormattedString()):
             expression: cst.FormattedString = cst.ensure_type(expression, cst.FormattedString)
             for part in expression.parts:
@@ -648,6 +653,8 @@ class ComputeControlFlowGraph(cst.CSTVisitor):
                     msg = f"Unknown BaseSlice type {baseslice}"
                     raise RuntimeError(msg)
             prev = self._make_cfg_node(expression, instance, prev)  # Subscript
+        elif expression is None:
+            return prev
         else:
             msg = f"Unknown expression type {expression}"
             raise RuntimeError(msg)

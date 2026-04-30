@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from importlib.metadata import Distribution, version
 
-from styx_compiler.core import StyxTranspiler
-
 
 def _is_editable() -> bool:
     dist = Distribution.from_name("styx-compiler")
@@ -46,4 +44,4 @@ else:
     # Get the version as specified by the wheel
     __version__ = version(__name__)
 
-__all__ = ("StyxTranspiler", "__version__")
+__all__ = ("__version__",)
