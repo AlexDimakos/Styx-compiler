@@ -552,7 +552,7 @@ async def insert(
     OL_DELIVERY_D: Optional[str] = None,
     OL_SUPPLY_W_ID: Optional[int] = None,
     OL_DIST_INFO: str = "",
-    OL_AMOUNT: float = 0.0, 
+    OL_AMOUNT: float = 0.0,
 reply_to: list = None):
     __state__ = {}
     __state__['OL_W_ID'] = OL_W_ID
@@ -597,7 +597,6 @@ async def insert(ctx: StatefulFunction, txn_id: str, reply_to: list = None):
 
 @newordertxn_operator.register
 async def new_order(ctx: StatefulFunction, params: dict, reply_to: list = None) -> str:
-    __state__ = ctx.get() or {}
     w_id: int = params["W_ID"]
     d_id: int = params["D_ID"]
     c_id: int = params["C_ID"]
@@ -612,41 +611,14 @@ async def new_order(ctx: StatefulFunction, params: dict, reply_to: list = None) 
         if item_w_id != w_id:
             all_local = False
             break
-    init_data = {
-        "W_ID": w_id,
-        "D_ID": d_id,
-        "C_ID": c_id,
-        "I_IDS": i_ids,
-        "I_QTYS": i_qtys,
-        "I_W_IDS": i_w_ids,
-        "O_ENTRY_D": o_entry_d,
-        "items_stock_response_count": 0,
-        "n_items": len(i_ids),
-        "total": 0,
-        "item_replies": [],
-        "all_items_received": False,
-        "warehouse_data": None,
-        "district_data": None,
-        "customer_data": None
-    }
-    __state__['W_ID'] = w_id
-    __state__['D_ID'] = d_id
-    __state__['C_ID'] = c_id
-    __state__['I_IDS'] = i_ids
-    __state__['I_QTYS'] = i_qtys
-    __state__['I_W_IDS'] = i_w_ids
-    __state__['O_ENTRY_D'] = o_entry_d
     district = f"{w_id}:{d_id}"
     customer = f"{w_id}:{d_id}:{c_id}"
     _gather_id = init_gather_barrier(ctx, 3, {'d_id': d_id, 'i_ids': i_ids, 'i_qtys': i_qtys, 'i_w_ids': i_w_ids, 'o_entry_d': o_entry_d, 'w_id': w_id}, reply_to)
     _g_reply_0 = [{'op_name': 'newordertxn', 'fun': 'new_order_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': 0}}]
-    ctx.put(__state__)
     ctx.call_remote_async(operator_name = 'warehouse', function_name = 'get_warehouse', key = w_id, params = (_g_reply_0,))
     _g_reply_1 = [{'op_name': 'newordertxn', 'fun': 'new_order_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': 1}}]
-    ctx.put(__state__)
     ctx.call_remote_async(operator_name = 'district', function_name = 'get_district', key = district, params = (w_id, d_id, c_id, o_entry_d, i_ids, i_qtys, i_w_ids, all_local, _g_reply_1))
     _g_reply_2 = [{'op_name': 'newordertxn', 'fun': 'new_order_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': 2}}]
-    ctx.put(__state__)
     ctx.call_remote_async(operator_name = 'customer', function_name = 'get_customer', key = customer, params = (_g_reply_2,))
 
 @newordertxn_operator.register
@@ -788,4 +760,3 @@ async def payment_step_2(ctx: StatefulFunction, func_context, _gather_partial = 
         f"D_TAX={district_data['D_TAX']:.4f},H_AMOUNT={__state__['H_AMOUNT']:.2f},"
         f"H_DATE={__state__['H_DATE']}{c_data_str}"
     ))
-

@@ -9,8 +9,11 @@ repos:
       - id: check-toml
       - id: check-json
       - id: end-of-file-fixer
+        exclude: ^examples/
       - id: mixed-line-ending
+        exclude: ^examples/
       - id: trailing-whitespace
+        exclude: ^examples/
 
 # This hook cannot handle newer Python syntax like type aliases yet
 #  - repo: https://github.com/pre-commit/pre-commit-hooks

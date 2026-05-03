@@ -1011,39 +1011,34 @@ async def get_discounted_price_step_2(ctx: StatefulFunction, func_context, _gath
 @user_operator.register
 async def buy_with_coupon(ctx: StatefulFunction, item: str, coupon: Optional[str], reply_to: list = None) -> bool:
     if coupon is None:
-        reply_to = push_continuation(ctx, reply_to, 'user', 'buy_with_coupon_step_2', ctx.key, {})
         ctx.call_remote_async(operator_name = 'user', function_name = 'buy_item', key = ctx.key, params = (1, item, reply_to))
     else:
-        reply_to = push_continuation(ctx, reply_to, 'user', 'buy_with_coupon_step_3', ctx.key, {'item': item})
+        reply_to = push_continuation(ctx, reply_to, 'user', 'buy_with_coupon_step_2', ctx.key, {'item': item})
         ctx.call_remote_async(operator_name = 'user', function_name = 'get_discounted_price', key = ctx.key, params = (item, coupon, reply_to))
 
 @user_operator.register
-async def buy_with_coupon_step_2(ctx: StatefulFunction, func_context, attr_1 = None, reply_to: list = None):
-    return send_reply(ctx, reply_to, attr_1)
-
-@user_operator.register
-async def buy_with_coupon_step_3(ctx: StatefulFunction, func_context, discounted_price = None, reply_to: list = None):
+async def buy_with_coupon_step_2(ctx: StatefulFunction, func_context, discounted_price = None, reply_to: list = None):
     __state__ = ctx.get() or {}
     params = resolve_context(ctx, func_context)
     (item,) = (params.get('item'),)
 
     if __state__['balance'] < discounted_price:
         raise NotEnoughBalance("Not enough balance to buy the item with coupon.")
-    reply_to = push_continuation(ctx, reply_to, 'user', 'buy_with_coupon_step_4', ctx.key, {'discounted_price': discounted_price, 'item': item})
+    reply_to = push_continuation(ctx, reply_to, 'user', 'buy_with_coupon_step_3', ctx.key, {'discounted_price': discounted_price, 'item': item})
     ctx.put(__state__)
     ctx.call_remote_async(operator_name = 'user', function_name = 'is_in_stock', key = ctx.key, params = (item, reply_to))
 
 @user_operator.register
-async def buy_with_coupon_step_4(ctx: StatefulFunction, func_context, attr_3 = None, reply_to: list = None):
+async def buy_with_coupon_step_3(ctx: StatefulFunction, func_context, attr_3 = None, reply_to: list = None):
     params = resolve_context(ctx, func_context)
     (discounted_price, item) = (params.get('discounted_price'), params.get('item'))
     if not attr_3:
         raise OutOfStock("Item is out of stock.")
-    reply_to = push_continuation(ctx, reply_to, 'user', 'buy_with_coupon_step_5', ctx.key, {'discounted_price': discounted_price, 'item': item})
+    reply_to = push_continuation(ctx, reply_to, 'user', 'buy_with_coupon_step_4', ctx.key, {'discounted_price': discounted_price, 'item': item})
     ctx.call_remote_async(operator_name = 'item', function_name = 'update_stock', key = item, params = (-1, reply_to))
 
 @user_operator.register
-async def buy_with_coupon_step_5(ctx: StatefulFunction, func_context, placeholder_return = None, reply_to: list = None):
+async def buy_with_coupon_step_4(ctx: StatefulFunction, func_context, placeholder_return = None, reply_to: list = None):
     __state__ = ctx.get() or {}
     params = resolve_context(ctx, func_context)
     (discounted_price, item) = (params.get('discounted_price'), params.get('item'))
@@ -1118,25 +1113,3 @@ async def inventory_value_gather_step_2(ctx: StatefulFunction, func_context, _ga
     reply_to = parent_reply_to
     prices = _g_results
     return send_reply(ctx, reply_to, sum(list(prices)))
-
-
-
-@user_operator.register
-async def test(ctx: StatefulFunction, item: str, reply_to: list = None) -> int:
-    flag = False
-    reply_to = push_continuation(ctx, reply_to, 'user', 'test_step_2', ctx.key, {'flag': flag})
-    ctx.call_remote_async(operator_name = 'item', function_name = 'update_stock', key = item, params = (1, reply_to))
-
-@user_operator.register
-async def test_step_2(ctx: StatefulFunction, func_context, placeholder_return = None, reply_to: list = None):
-    params = resolve_context(ctx, func_context)
-    (flag,) = (params.get('flag'),)
-
-    if 1 == 1:
-        flag = True
-    else:
-        temp = 5
-
-    if flag:
-        return send_reply(ctx, reply_to, 1)
-    return send_reply(ctx, reply_to, temp)

@@ -286,19 +286,3 @@ class User:
 
         prices = gather(*[item.get_price() for item in self.myitems])
         return sum(list(prices))
-
-
-    def test(self, item: Item) -> int:
-
-        flag = False
-        item.update_stock(1)
-
-        if 1 == 1:
-            flag = True
-        else:
-            temp = 5
-
-        if flag:
-            return 1
-
-        return temp
