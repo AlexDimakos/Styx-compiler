@@ -541,7 +541,7 @@ class NewOrderTxn:
         i_qtys: list[int] = params["I_QTYS"]
 
         assert len(i_ids) > 0
-        # assert len(i_ids) == len(i_w_ids) == len(i_qtys)
+        assert len(i_ids) == len(i_w_ids) == len(i_qtys)
 
         all_local = True
         for item_w_id in i_w_ids:
@@ -612,6 +612,19 @@ class PaymentTxn:
 
     def __key__(self) -> str:
         return self.txn_id
+    
+
+    async def get_customer_data(self, c_last: Optional[str]) -> Dict:
+        if self.C_ID is not None:
+            customer = get_entity_by_key(
+                Customer, (self.W_ID, self.C_D_ID, self.C_ID)
+            )
+            return customer.pay(self.H_AMOUNT, self.D_ID, self.W_ID)
+        else:
+            customer_idx = get_entity_by_key(
+                CustomerIndex, (self.C_W_ID, self.C_D_ID, c_last)
+            )
+            return customer_idx.pay(self.H_AMOUNT, self.D_ID, self.W_ID)
 
     def payment(self, params: dict) -> str:
         w_id: Warehouse = params["W_ID"]
@@ -624,27 +637,11 @@ class PaymentTxn:
         c_last: Optional[str] = params.get("C_LAST")
         h_date: str = params["H_DATE"]
 
-        self.W_ID = w_id
-        self.D_ID = d_id
-        self.C_ID = c_id
-        self.C_W_ID = c_w_id
-        self.C_D_ID = c_d_id
-        self.H_DATE = h_date
-        self.H_AMOUNT = h_amount
-
-        if c_id is not None:
-            customer = get_entity_by_key(Customer, (w_id, c_d_id, c_id))
-            customer_data = customer.pay(h_amount, d_id, w_id)
-        else:
-            customer_idx = get_entity_by_key(CustomerIndex, (c_w_id, c_d_id, c_last))
-            customer_data = customer_idx.pay(h_amount, d_id, w_id)
-
         district = get_entity_by_key(District, (w_id, d_id))
 
-        district_data, warehouse_data = gather(
-                district.pay(h_amount), w_id.pay(h_amount)
-            )
-
+        customer_data, district_data, warehouse_data = gather(
+            self.get_customer_data(c_last), district.pay(h_amount), w_id.pay(h_amount)
+        )
 
         # Build history record and persist it.
         h_data = f"{warehouse_data['W_NAME']}    {district_data['D_NAME']}"

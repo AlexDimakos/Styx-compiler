@@ -550,6 +550,20 @@ class FunctionProcessor:
 
         target_var, call_node, receiver, remote_method, tuple_target = FunctionProcessor._extract_call_info(stmt)
 
+        if (
+            len(post_split) == 1
+            and isinstance(post_split[0], cst.SimpleStatementLine)
+            and len(post_split[0].body) == 1
+            and isinstance(post_split[0].body[0], cst.Return)
+        ):
+            ret_stmt = post_split[0].body[0]
+
+            if (
+                isinstance(ret_stmt.value, cst.Name)
+                and ret_stmt.value.value == target_var
+            ):
+                has_continuation = False
+
         # Determine which variables to save at this split point
         vars_to_save = self._compute_vars_to_save(stmt)
 
