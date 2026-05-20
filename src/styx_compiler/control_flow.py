@@ -540,11 +540,16 @@ class ComputeControlFlowGraph(cst.CSTVisitor):
             expression: cst.UnaryOperation = cst.ensure_type(expression, cst.UnaryOperation)
             prev = self._visit_expression(expression.expression, instance, prev, context)
             prev = self._make_cfg_node(expression.expression, instance, prev)  # UnaryOperation
-        elif m.matches(expression, m.BinaryOperation() | m.BooleanOperation()):
+        elif m.matches(expression, m.BinaryOperation()):
             expression: cst.BinaryOperation = cst.ensure_type(expression, cst.BinaryOperation)
             prev = self._visit_expression(expression.left, instance, prev, context)
             prev = self._visit_expression(expression.right, instance, prev, context)
-            prev = self._make_cfg_node(expression, instance, prev)  # BinaryOperation, BooleanOperation
+            prev = self._make_cfg_node(expression, instance, prev)  # BinaryOperation
+        elif m.matches(expression, m.BooleanOperation()):
+            expression: cst.BooleanOperation = cst.ensure_type(expression, cst.BooleanOperation)
+            prev = self._visit_expression(expression.left, instance, prev, context)
+            prev = self._visit_expression(expression.right, instance, prev, context)
+            prev = self._make_cfg_node(expression, instance, prev)  # BooleanOperation
         elif m.matches(expression, m.Comparison()):
             # noinspection DuplicatedCode
             expression: cst.Comparison = cst.ensure_type(expression, cst.Comparison)

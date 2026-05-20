@@ -140,7 +140,8 @@ class ReturnHandlerTransformer(cst.CSTTransformer):
             if self._has_reply_to_param(updated_node):
                 if self.uses_state:
                     new_body.append(cst.parse_statement("ctx.put(__state__)"))
-                new_body.append(cst.parse_statement("return send_reply(ctx, reply_to, None)"))
+                if not self._in_gather_join:
+                    new_body.append(cst.parse_statement("return send_reply(ctx, reply_to, None)"))
             elif self.uses_state:
                 # No reply_to but state used update state
                 new_body.append(cst.parse_statement("ctx.put(__state__)"))

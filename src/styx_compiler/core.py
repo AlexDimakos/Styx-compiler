@@ -81,12 +81,11 @@ def send_reply(ctx: StatefulFunction, reply_to: list, result):
         reply_info = reply_to[-1]
         if isinstance(reply_info, dict) and reply_info.get("sink"):
             return
-        reply_to.pop()
         ctx.call_remote_async(
             operator_name=reply_info["op_name"],
             function_name=reply_info["fun"],
             key=reply_info["id"],
-            params=(reply_info["context"], result, reply_to),
+            params=(reply_info["context"], result, reply_to[:-1]),
         )
     else:
         return result

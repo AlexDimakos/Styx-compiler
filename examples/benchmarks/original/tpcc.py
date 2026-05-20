@@ -127,9 +127,14 @@ class District:
         send_async(Order(w_id, d_id, d_next_o_id, c_id, o_entry_d, None, len(i_ids), all_local))
         send_async(NewOrder(w_id, d_id, d_next_o_id))
 
+        item_replies = gather(*[
+            i_ids[i].get_item(i, w_id, d_id, o_entry_d, i_qtys[i], i_w_ids[i], d_next_o_id)
+            for i in range(len(i_ids))
+        ])
+
         self.D_NEXT_O_ID += 1
 
-        return data
+        return {'district': data, 'items': item_replies}
 
     def pay(self, h_amount: float) -> Dict:
         if not exists(self):
@@ -554,14 +559,13 @@ class NewOrderTxn:
         customer = get_entity_by_key(Customer, (w_id, d_id, c_id))
 
 
-        warehouse_data, district_data, customer_data = gather(w_id.get_warehouse(), district.get_district(
-            w_id, d_id, c_id, o_entry_d, i_ids, i_qtys, i_w_ids, all_local), customer.get_customer()
+        warehouse_data, district_bundle, customer_data = gather(
+            w_id.get_warehouse(),
+            district.get_district(w_id, d_id, c_id, o_entry_d, i_ids, i_qtys, i_w_ids, all_local),
+            customer.get_customer(),
         )
-
-        item_replies = gather(*[item.get_item(
-            i, w_id, d_id, o_entry_d, i_qtys[i], i_w_ids[i], district_data['D_NEXT_O_ID']
-        ) for i, item in enumerate(i_ids)])
-
+        district_data = district_bundle['district']
+        item_replies = district_bundle['items']
 
         total = sum(item_reply['ol_amount'] for item_reply in item_replies)
 
@@ -617,7 +621,7 @@ class PaymentTxn:
     async def get_customer_data(self, c_last: Optional[str]) -> Dict:
         if self.C_ID is not None:
             customer = get_entity_by_key(
-                Customer, (self.W_ID, self.C_D_ID, self.C_ID)
+                Customer, (self.C_W_ID, self.C_D_ID, self.C_ID)
             )
             return customer.pay(self.H_AMOUNT, self.D_ID, self.W_ID)
         else:
@@ -636,6 +640,14 @@ class PaymentTxn:
         c_id: Optional[int] = int(params["C_ID"]) if params.get("C_ID") is not None else None
         c_last: Optional[str] = params.get("C_LAST")
         h_date: str = params["H_DATE"]
+
+        self.W_ID = w_id
+        self.D_ID = d_id
+        self.C_ID = c_id
+        self.C_W_ID = c_w_id
+        self.C_D_ID = c_d_id
+        self.H_DATE = h_date
+        self.H_AMOUNT = h_amount
 
         district = get_entity_by_key(District, (w_id, d_id))
 

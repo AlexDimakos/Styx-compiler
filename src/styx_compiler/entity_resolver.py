@@ -35,6 +35,51 @@ class EntityResolver:
         if isinstance(node, cst.Call) and isinstance(node.func, cst.Name) and node.func.value in self.entities:
             return node.func.value
 
+        # libcst_mypy doesn't attach types to Subscript nodes, so derive the
+        # element type from the collection's parameterized type
+        # (e.g. i_ids: list[Item] -> Item).
+        if isinstance(node, cst.Subscript):
+            collection_type = self.metadata.get(node.value)
+            if collection_type is not None:
+                element_type = self._extract_element_type_name(collection_type)
+                if element_type in self.entities:
+                    return element_type
+
+        if isinstance(node, cst.Name):
+            return self._local_entity_binding(node.value)
+
+        return None
+
+    def _local_entity_binding(self, var_name: str) -> str | None:
+        """Walk this function's body looking for `var_name = <rhs>` and return
+        the entity class name implied by the rhs, or None."""
+        for stmt in self.original_func.body.body:
+            if not isinstance(stmt, cst.SimpleStatementLine):
+                continue
+            for el in stmt.body:
+                target = None
+                rhs: cst.BaseExpression | None = None
+                if isinstance(el, cst.Assign) and len(el.targets) == 1:
+                    target = el.targets[0].target
+                    rhs = el.value
+                elif isinstance(el, cst.AnnAssign):
+                    target = el.target
+                    rhs = el.value
+                if not (isinstance(target, cst.Name) and target.value == var_name and rhs is not None):
+                    continue
+
+                if isinstance(rhs, cst.Call) and isinstance(rhs.func, cst.Name) and rhs.func.value in self.entities:
+                    return rhs.func.value
+
+                if (
+                    isinstance(rhs, cst.Call)
+                    and isinstance(rhs.func, cst.Name)
+                    and rhs.func.value == "get_entity_by_key"
+                    and len(rhs.args) >= 1
+                    and isinstance(rhs.args[0].value, cst.Name)
+                    and rhs.args[0].value.value in self.entities
+                ):
+                    return rhs.args[0].value.value
         return None
 
     def is_entity_node(self, node: cst.CSTNode) -> bool:
@@ -57,6 +102,24 @@ class EntityResolver:
         if "[" in fullname:
             fullname = fullname.split("[")[0]
         return fullname.rsplit(".", 1)[-1]
+
+    @staticmethod
+    def _extract_element_type_name(mypy_type) -> str | None:
+        """Element type name from a parameterized list/tuple/dict, or None."""
+
+        fullname = getattr(mypy_type, "fullname", None)
+        if not isinstance(fullname, str) or "[" not in fullname or not fullname.endswith("]"):
+            return None
+        container = fullname.split("[", 1)[0].rsplit(".", 1)[-1]
+        inner = fullname[fullname.index("[") + 1 : -1]
+
+        parts = [p.strip() for p in inner.split(",")]
+        target = parts[-1] if container == "dict" and len(parts) >= 2 else parts[0]
+        if target in ("...", "Any", ""):
+            return None
+        if "[" in target:
+            target = target.split("[", 1)[0]
+        return target.rsplit(".", 1)[-1]
 
     # ── operator + key resolution ─────────────────────────────────────
 

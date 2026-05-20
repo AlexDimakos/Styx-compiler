@@ -8,12 +8,11 @@ def send_reply(ctx: StatefulFunction, reply_to: list, result):
         reply_info = reply_to[-1]
         if isinstance(reply_info, dict) and reply_info.get("sink"):
             return
-        reply_to.pop()
         ctx.call_remote_async(
             operator_name=reply_info["op_name"],
             function_name=reply_info["fun"],
             key=reply_info["id"],
-            params=(reply_info["context"], result, reply_to),
+            params=(reply_info["context"], result, reply_to[:-1]),
         )
     else:
         return result
@@ -205,9 +204,28 @@ async def get_district(ctx: StatefulFunction, w_id: int, d_id: int, c_id: int,
     ctx.call_remote_async(operator_name = 'order', function_name = 'insert', key = str(w_id) + ":" + str(d_id) + ":" + str(d_next_o_id), params = (w_id, d_id, d_next_o_id, c_id, o_entry_d, None, len(i_ids), all_local, [{'sink': True}]))
     ctx.put(__state__)
     ctx.call_remote_async(operator_name = 'neworder', function_name = 'insert', key = str(w_id) + ":" + str(d_id) + ":" + str(d_next_o_id), params = (w_id, d_id, d_next_o_id, [{'sink': True}]))
+    _g_iter = list(range(len(i_ids)))
+    _gather_id = init_gather_barrier(ctx, len(_g_iter), {'data': data}, reply_to)
+    for (_g_tag, i) in enumerate(_g_iter):
+        _g_reply = [{'op_name': 'district', 'fun': 'get_district_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': _g_tag}}]
+        ctx.put(__state__)
+        ctx.call_remote_async(operator_name = 'item', function_name = 'get_item', key = i_ids[i], params = (i, w_id, d_id, o_entry_d, i_qtys[i], i_w_ids[i], d_next_o_id, _g_reply))
+    ctx.put(__state__)
+
+@district_operator.register
+async def get_district_step_2(ctx: StatefulFunction, func_context, _gather_partial = None, reply_to: list = None):
+    __state__ = ctx.get() or {}
+    barrier_id = func_context['_g_barrier']
+    _g_tag = func_context['_g_tag']
+    (is_complete, _g_results, saved, parent_reply_to) = update_gather_barrier(ctx, barrier_id, _g_tag, _gather_partial)
+    if not is_complete:
+        return
+    (data,) = (saved.get('data'),)
+    reply_to = parent_reply_to
+    item_replies = _g_results
     __state__['D_NEXT_O_ID'] += 1
     ctx.put(__state__)
-    return send_reply(ctx, reply_to, data)
+    return send_reply(ctx, reply_to, {'district': data, 'items': item_replies})
 
 
 @district_operator.register
@@ -552,7 +570,7 @@ async def insert(
     OL_DELIVERY_D: Optional[str] = None,
     OL_SUPPLY_W_ID: Optional[int] = None,
     OL_DIST_INFO: str = "",
-    OL_AMOUNT: float = 0.0,
+    OL_AMOUNT: float = 0.0, 
 reply_to: list = None):
     __state__ = {}
     __state__['OL_W_ID'] = OL_W_ID
@@ -613,7 +631,7 @@ async def new_order(ctx: StatefulFunction, params: dict, reply_to: list = None) 
             break
     district = f"{w_id}:{d_id}"
     customer = f"{w_id}:{d_id}:{c_id}"
-    _gather_id = init_gather_barrier(ctx, 3, {'d_id': d_id, 'i_ids': i_ids, 'i_qtys': i_qtys, 'i_w_ids': i_w_ids, 'o_entry_d': o_entry_d, 'w_id': w_id}, reply_to)
+    _gather_id = init_gather_barrier(ctx, 3, {'o_entry_d': o_entry_d}, reply_to)
     _g_reply_0 = [{'op_name': 'newordertxn', 'fun': 'new_order_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': 0}}]
     ctx.call_remote_async(operator_name = 'warehouse', function_name = 'get_warehouse', key = w_id, params = (_g_reply_0,))
     _g_reply_1 = [{'op_name': 'newordertxn', 'fun': 'new_order_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': 1}}]
@@ -628,26 +646,11 @@ async def new_order_step_2(ctx: StatefulFunction, func_context, _gather_partial 
     (is_complete, _g_results, saved, parent_reply_to) = update_gather_barrier(ctx, barrier_id, _g_tag, _gather_partial)
     if not is_complete:
         return
-    (d_id, i_ids, i_qtys, i_w_ids, o_entry_d, w_id) = (saved.get('d_id'), saved.get('i_ids'), saved.get('i_qtys'), saved.get('i_w_ids'), saved.get('o_entry_d'), saved.get('w_id'))
+    (o_entry_d,) = (saved.get('o_entry_d'),)
     reply_to = parent_reply_to
-    warehouse_data, district_data, customer_data = _g_results
-    _g_iter = list(enumerate(i_ids))
-    _gather_id = init_gather_barrier(ctx, len(_g_iter), {'customer_data': customer_data, 'district_data': district_data, 'o_entry_d': o_entry_d, 'warehouse_data': warehouse_data}, reply_to)
-    for (_g_tag, (i, item)) in enumerate(_g_iter):
-        _g_reply = [{'op_name': 'newordertxn', 'fun': 'new_order_step_3', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': _g_tag}}]
-        ctx.call_remote_async(operator_name = 'item', function_name = 'get_item', key = item, params = (i, w_id, d_id, o_entry_d, i_qtys[i], i_w_ids[i], district_data['D_NEXT_O_ID'], _g_reply))
-    return send_reply(ctx, reply_to, None)
-
-@newordertxn_operator.register
-async def new_order_step_3(ctx: StatefulFunction, func_context, _gather_partial = None, reply_to: list = None):
-    barrier_id = func_context['_g_barrier']
-    _g_tag = func_context['_g_tag']
-    (is_complete, _g_results, saved, parent_reply_to) = update_gather_barrier(ctx, barrier_id, _g_tag, _gather_partial)
-    if not is_complete:
-        return
-    (customer_data, district_data, o_entry_d, warehouse_data) = (saved.get('customer_data'), saved.get('district_data'), saved.get('o_entry_d'), saved.get('warehouse_data'))
-    reply_to = parent_reply_to
-    item_replies = _g_results
+    warehouse_data, district_bundle, customer_data = _g_results
+    district_data = district_bundle['district']
+    item_replies = district_bundle['items']
     _comp_result_1 = []
     for item_reply in item_replies:
         _comp_result_1.append(item_reply['ol_amount'])
@@ -702,7 +705,7 @@ reply_to: list = None):
 async def get_customer_data(ctx: StatefulFunction, c_last: Optional[str], reply_to: list = None) -> Dict:
     __state__ = ctx.get() or {}
     if __state__['C_ID'] is not None:
-        customer = f"{__state__['W_ID']}:{__state__['C_D_ID']}:{__state__['C_ID']}"
+        customer = f"{__state__['C_W_ID']}:{__state__['C_D_ID']}:{__state__['C_ID']}"
         ctx.put(__state__)
         ctx.call_remote_async(operator_name = 'customer', function_name = 'pay', key = customer, params = (__state__['H_AMOUNT'], __state__['D_ID'], __state__['W_ID'], reply_to))
     else:
@@ -713,6 +716,7 @@ async def get_customer_data(ctx: StatefulFunction, c_last: Optional[str], reply_
 
 @paymenttxn_operator.register
 async def payment(ctx: StatefulFunction, params: dict, reply_to: list = None) -> str:
+    __state__ = ctx.get() or {}
     w_id: int = params["W_ID"]
     d_id: int = int(params["D_ID"])
     h_amount: float = params["H_AMOUNT"]
@@ -723,13 +727,23 @@ async def payment(ctx: StatefulFunction, params: dict, reply_to: list = None) ->
     attr_2 = params.get("C_LAST")
     c_last: Optional[str] = attr_2
     h_date: str = params["H_DATE"]
+    __state__['W_ID'] = w_id
+    __state__['D_ID'] = d_id
+    __state__['C_ID'] = c_id
+    __state__['C_W_ID'] = c_w_id
+    __state__['C_D_ID'] = c_d_id
+    __state__['H_DATE'] = h_date
+    __state__['H_AMOUNT'] = h_amount
     district = f"{w_id}:{d_id}"
     _gather_id = init_gather_barrier(ctx, 3, {}, reply_to)
     _g_reply_0 = [{'op_name': 'paymenttxn', 'fun': 'payment_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': 0}}]
+    ctx.put(__state__)
     ctx.call_remote_async(operator_name = 'paymenttxn', function_name = 'get_customer_data', key = ctx.key, params = (c_last, _g_reply_0))
     _g_reply_1 = [{'op_name': 'paymenttxn', 'fun': 'payment_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': 1}}]
+    ctx.put(__state__)
     ctx.call_remote_async(operator_name = 'district', function_name = 'pay', key = district, params = (h_amount, _g_reply_1))
     _g_reply_2 = [{'op_name': 'paymenttxn', 'fun': 'payment_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': 2}}]
+    ctx.put(__state__)
     ctx.call_remote_async(operator_name = 'warehouse', function_name = 'pay', key = w_id, params = (h_amount, _g_reply_2))
 
 @paymenttxn_operator.register
@@ -760,3 +774,4 @@ async def payment_step_2(ctx: StatefulFunction, func_context, _gather_partial = 
         f"D_TAX={district_data['D_TAX']:.4f},H_AMOUNT={__state__['H_AMOUNT']:.2f},"
         f"H_DATE={__state__['H_DATE']}{c_data_str}"
     ))
+
