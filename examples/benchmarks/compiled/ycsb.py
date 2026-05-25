@@ -8,12 +8,11 @@ def send_reply(ctx: StatefulFunction, reply_to: list, result):
         reply_info = reply_to[-1]
         if isinstance(reply_info, dict) and reply_info.get("sink"):
             return
-        reply_to.pop()
         ctx.call_remote_async(
             operator_name=reply_info["op_name"],
             function_name=reply_info["fun"],
             key=reply_info["id"],
-            params=(reply_info["context"], result, reply_to),
+            params=(reply_info["context"], result, reply_to[:-1]),
         )
     else:
         return result
@@ -130,20 +129,15 @@ async def update(ctx: StatefulFunction, reply_to: list = None) -> tuple[str, int
     return send_reply(ctx, reply_to, (ctx.key, __state__['value']))
 
 
-@ycsb_operator.register
-async def update_t(ctx: StatefulFunction, reply_to: list = None) -> None:
-    __state__ = ctx.get() or {}
-    __state__['value'] += 1
-    ctx.put(__state__)
-
 
 @ycsb_operator.register
 async def transfer(ctx: StatefulFunction, key_b: str, reply_to: list = None) -> tuple[str, int]:
     __state__ = ctx.get() or {}
     ctx.put(__state__)
-    ctx.call_remote_async(operator_name = 'ycsb', function_name = 'update_t', key = key_b, params = ([{'sink': True}],))
+    ctx.call_remote_async(operator_name = 'ycsb', function_name = 'update', key = key_b, params = ([{'sink': True}],))
     __state__['value'] -= 1
     if __state__['value'] < 0:
         raise NotEnoughCredit(f"Not enough credit for user: {ctx.key}")
     ctx.put(__state__)
     return send_reply(ctx, reply_to, (ctx.key, __state__['value']))
+
