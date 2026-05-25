@@ -8,12 +8,11 @@ def send_reply(ctx: StatefulFunction, reply_to: list, result):
         reply_info = reply_to[-1]
         if isinstance(reply_info, dict) and reply_info.get("sink"):
             return
-        reply_to.pop()
         ctx.call_remote_async(
             operator_name=reply_info["op_name"],
             function_name=reply_info["fun"],
             key=reply_info["id"],
-            params=(reply_info["context"], result, reply_to),
+            params=(reply_info["context"], result, reply_to[:-1]),
         )
     else:
         return result
@@ -276,6 +275,30 @@ async def drain_stock_step_5(ctx: StatefulFunction, func_context, placeholder_re
     (item, total) = (params.get('item'), params.get('total'))
     total += 1
     ctx.call_remote_async(operator_name = 'user', function_name = 'drain_stock_step_2', key = ctx.key, params = ({'item': item, 'total': total}, None, reply_to))
+
+
+@user_operator.register
+async def discounted_sum(ctx: StatefulFunction, items: list[str], threshold: int, reply_to: list = None) -> int:
+    if not items:
+        return send_reply(ctx, reply_to, 0)
+    attr_1 = items[0]
+    reply_to = push_continuation(ctx, reply_to, 'user', 'discounted_sum_step_2', ctx.key, {'items': items, 'threshold': threshold})
+    ctx.call_remote_async(operator_name = 'item', function_name = 'get_price', key = attr_1, params = (reply_to,))
+
+@user_operator.register
+async def discounted_sum_step_2(ctx: StatefulFunction, func_context, price = None, reply_to: list = None):
+    params = resolve_context(ctx, func_context)
+    (items, threshold) = (params.get('items'), params.get('threshold'))
+    reply_to = push_continuation(ctx, reply_to, 'user', 'discounted_sum_step_3', ctx.key, {'price': price, 'threshold': threshold})
+    ctx.call_remote_async(operator_name = 'user', function_name = 'discounted_sum', key = ctx.key, params = (items[1:], threshold, reply_to))
+
+@user_operator.register
+async def discounted_sum_step_3(ctx: StatefulFunction, func_context, rest = None, reply_to: list = None):
+    params = resolve_context(ctx, func_context)
+    (price, threshold) = (params.get('price'), params.get('threshold'))
+    if price > threshold:
+        return send_reply(ctx, reply_to, rest + int(price * 0.9))
+    return send_reply(ctx, reply_to, rest + price)
 
 
 
@@ -1113,3 +1136,4 @@ async def inventory_value_gather_step_2(ctx: StatefulFunction, func_context, _ga
     reply_to = parent_reply_to
     prices = _g_results
     return send_reply(ctx, reply_to, sum(list(prices)))
+

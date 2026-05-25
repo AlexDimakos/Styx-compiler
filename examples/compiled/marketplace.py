@@ -8,12 +8,11 @@ def send_reply(ctx: StatefulFunction, reply_to: list, result):
         reply_info = reply_to[-1]
         if isinstance(reply_info, dict) and reply_info.get("sink"):
             return
-        reply_to.pop()
         ctx.call_remote_async(
             operator_name=reply_info["op_name"],
             function_name=reply_info["fun"],
             key=reply_info["id"],
-            params=(reply_info["context"], result, reply_to),
+            params=(reply_info["context"], result, reply_to[:-1]),
         )
     else:
         return result
@@ -204,13 +203,8 @@ async def add_rating(ctx: StatefulFunction, score: int, reply_to: list = None) -
         raise ValueError("Rating must be between 0 and 10.")
     __state__['rating_sum'] += score
     __state__['rating_count'] += 1
-    reply_to = push_continuation(ctx, reply_to, 'product', 'add_rating_step_2', ctx.key, {})
     ctx.put(__state__)
     ctx.call_remote_async(operator_name = 'product', function_name = 'get_average_rating', key = ctx.key, params = (reply_to,))
-
-@product_operator.register
-async def add_rating_step_2(ctx: StatefulFunction, func_context, attr_1 = None, reply_to: list = None):
-    return send_reply(ctx, reply_to, attr_1)
 
 
 @product_operator.register
@@ -2000,7 +1994,7 @@ async def get_top_product_scores_step_4(ctx: StatefulFunction, func_context, att
 
 @marketplace_operator.register
 async def get_affordable_products(
-    ctx: StatefulFunction, products: list[str], budget: int,
+    ctx: StatefulFunction, products: list[str], budget: int, 
 reply_to: list = None) -> list[str]:
     _comp_result_1 = []
     __loop_index_1 = 0
@@ -2411,7 +2405,7 @@ async def warehouse_health_check_step_4(ctx: StatefulFunction, func_context, att
 
 @marketplace_operator.register
 async def find_overstocked_warehouses(
-    ctx: StatefulFunction, warehouses: list[str], threshold: int,
+    ctx: StatefulFunction, warehouses: list[str], threshold: int, 
 reply_to: list = None) -> list[str]:
     _comp_result_1 = []
     __loop_index_1 = 0
@@ -2550,7 +2544,7 @@ async def total_platform_earnings_from_sellers_step_4(ctx: StatefulFunction, fun
 
 @marketplace_operator.register
 async def multi_product_availability_check(
-    ctx: StatefulFunction, products: list[str], quantities: list[int],
+    ctx: StatefulFunction, products: list[str], quantities: list[int], 
 reply_to: list = None) -> bool:
     __loop_index_1 = 0
     ctx.call_remote_async(operator_name = 'marketplace', function_name = 'multi_product_availability_check_step_2', key = ctx.key, params = ({'__loop_index_1': __loop_index_1, 'products': products, 'quantities': quantities}, None, reply_to))
@@ -2655,7 +2649,7 @@ async def compute_order_breakdown_step_5(ctx: StatefulFunction, func_context, at
 
 @marketplace_operator.register
 async def loyalty_cashback_campaign(
-    ctx: StatefulFunction, customers: list[str], products: list[str],
+    ctx: StatefulFunction, customers: list[str], products: list[str], 
 reply_to: list = None) -> int:
     active_count = 0
     __loop_index_1 = 0
@@ -2717,7 +2711,7 @@ async def loyalty_cashback_campaign_step_7(ctx: StatefulFunction, func_context, 
 
 @marketplace_operator.register
 async def get_seller_product_prices(
-    ctx: StatefulFunction, seller: str, products: list[str],
+    ctx: StatefulFunction, seller: str, products: list[str], 
 reply_to: list = None) -> list[int]:
     _comp_result_1 = []
     __loop_index_1 = 0
@@ -2919,7 +2913,7 @@ async def cross_entity_stats_step_16(ctx: StatefulFunction, func_context, attr_1
 
 @marketplace_operator.register
 async def fire_restock_notifications(
-    ctx: StatefulFunction, products: list[str], threshold: int,
+    ctx: StatefulFunction, products: list[str], threshold: int, 
 reply_to: list = None) -> None:
     __loop_index_1 = 0
     ctx.call_remote_async(operator_name = 'marketplace', function_name = 'fire_restock_notifications_step_2', key = ctx.key, params = ({'__loop_index_1': __loop_index_1, 'products': products, 'threshold': threshold}, None, reply_to))
@@ -2927,7 +2921,7 @@ reply_to: list = None) -> None:
 @marketplace_operator.register
 async def fire_restock_notifications_step_2(ctx: StatefulFunction, func_context, placeholder_return = None, reply_to: list = None):
     params = resolve_context(ctx, func_context)
-    (__loop_index_1, products, threshold) = (params.get('__loop_index_1'), params.get('products'), params.get('threshold'))
+    (__loop_index_1, attr_1, products, threshold) = (params.get('__loop_index_1'), params.get('attr_1'), params.get('products'), params.get('threshold'))
     if __loop_index_1 >= len(products):
         return send_reply(ctx, reply_to, None)
     else:
@@ -2942,7 +2936,7 @@ async def fire_restock_notifications_step_3(ctx: StatefulFunction, func_context,
     (__loop_index_1, p, products, threshold) = (params.get('__loop_index_1'), params.get('p'), params.get('products'), params.get('threshold'))
     if attr_1 < threshold:
         ctx.call_remote_async(operator_name = 'product', function_name = 'add_tag', key = p, params = ("low_stock", [{'sink': True}]))
-    ctx.call_remote_async(operator_name = 'marketplace', function_name = 'fire_restock_notifications_step_2', key = ctx.key, params = ({'__loop_index_1': __loop_index_1, 'products': products, 'threshold': threshold}, None, reply_to))
+    ctx.call_remote_async(operator_name = 'marketplace', function_name = 'fire_restock_notifications_step_2', key = ctx.key, params = ({'__loop_index_1': __loop_index_1, 'attr_1': attr_1, 'products': products, 'threshold': threshold}, None, reply_to))
 
 
 @marketplace_operator.register
@@ -3079,7 +3073,7 @@ async def recursive_price_sum_step_3(ctx: StatefulFunction, func_context, rest_s
 
 @marketplace_operator.register
 async def tag_popular_products(
-    ctx: StatefulFunction, products: list[str], score_threshold: int,
+    ctx: StatefulFunction, products: list[str], score_threshold: int, 
 reply_to: list = None) -> int:
     tagged = 0
     __loop_index_1 = 0
@@ -3088,9 +3082,9 @@ reply_to: list = None) -> int:
 @marketplace_operator.register
 async def tag_popular_products_step_2(ctx: StatefulFunction, func_context, placeholder_return = None, reply_to: list = None):
     params = resolve_context(ctx, func_context)
-    (__loop_index_1, products, score_threshold, tagged) = (params.get('__loop_index_1'), params.get('products'), params.get('score_threshold'), params.get('tagged'))
+    (__loop_index_1, products, score, score_threshold, tagged) = (params.get('__loop_index_1'), params.get('products'), params.get('score'), params.get('score_threshold'), params.get('tagged'))
     if __loop_index_1 >= len(products):
-        ctx.call_remote_async(operator_name = 'marketplace', function_name = 'tag_popular_products_step_3', key = ctx.key, params = ({'__loop_index_1': __loop_index_1, 'products': products, 'score_threshold': score_threshold, 'tagged': tagged}, None, reply_to))
+        ctx.call_remote_async(operator_name = 'marketplace', function_name = 'tag_popular_products_step_3', key = ctx.key, params = ({'__loop_index_1': __loop_index_1, 'products': products, 'score': score, 'score_threshold': score_threshold, 'tagged': tagged}, None, reply_to))
     else:
         p = products[__loop_index_1]
         __loop_index_1 += 1
@@ -3100,7 +3094,7 @@ async def tag_popular_products_step_2(ctx: StatefulFunction, func_context, place
 @marketplace_operator.register
 async def tag_popular_products_step_3(ctx: StatefulFunction, func_context, placeholder_return = None, reply_to: list = None):
     params = resolve_context(ctx, func_context)
-    (__loop_index_1, products, score_threshold, tagged) = (params.get('__loop_index_1'), params.get('products'), params.get('score_threshold'), params.get('tagged'))
+    (__loop_index_1, products, score, score_threshold, tagged) = (params.get('__loop_index_1'), params.get('products'), params.get('score'), params.get('score_threshold'), params.get('tagged'))
     return send_reply(ctx, reply_to, tagged)
 
 @marketplace_operator.register
@@ -3110,12 +3104,12 @@ async def tag_popular_products_step_4(ctx: StatefulFunction, func_context, score
     if score >= score_threshold:
         ctx.call_remote_async(operator_name = 'product', function_name = 'add_tag', key = p, params = ("trending", [{'sink': True}]))
         tagged += 1
-    ctx.call_remote_async(operator_name = 'marketplace', function_name = 'tag_popular_products_step_2', key = ctx.key, params = ({'__loop_index_1': __loop_index_1, 'products': products, 'score_threshold': score_threshold, 'tagged': tagged}, None, reply_to))
+    ctx.call_remote_async(operator_name = 'marketplace', function_name = 'tag_popular_products_step_2', key = ctx.key, params = ({'__loop_index_1': __loop_index_1, 'products': products, 'score': score, 'score_threshold': score_threshold, 'tagged': tagged}, None, reply_to))
 
 
 @marketplace_operator.register
 async def get_customer_cart_value(
-    ctx: StatefulFunction, customer: str, products: list[str],
+    ctx: StatefulFunction, customer: str, products: list[str], 
 reply_to: list = None) -> int:
     reply_to = push_continuation(ctx, reply_to, 'marketplace', 'get_customer_cart_value_step_2', ctx.key, {'products': products})
     ctx.call_remote_async(operator_name = 'customer', function_name = 'get_cart', key = customer, params = (reply_to,))
@@ -3320,7 +3314,7 @@ async def get_product_dict_step_5(ctx: StatefulFunction, func_context, attr_2 = 
 
 @marketplace_operator.register
 async def count_high_rated_products(
-    ctx: StatefulFunction, products: list[str], min_rating: int,
+    ctx: StatefulFunction, products: list[str], min_rating: int, 
 reply_to: list = None) -> int:
     _comp_result_1 = []
     __loop_index_1 = 0
@@ -3386,7 +3380,7 @@ async def unpack_and_use_tuple_step_2(ctx: StatefulFunction, func_context, attr_
 
 @marketplace_operator.register
 async def nested_comprehension_test(
-    ctx: StatefulFunction, sellers: list[str], products: list[str],
+    ctx: StatefulFunction, sellers: list[str], products: list[str], 
 reply_to: list = None) -> list[int]:
     _comp_result_1 = []
     __loop_index_1 = 0
@@ -3478,3 +3472,4 @@ async def dispatch_all_pending_step_4(ctx: StatefulFunction, func_context, place
     (__loop_index_1, dispatched, order_ids, warehouse) = (params.get('__loop_index_1'), params.get('dispatched'), params.get('order_ids'), params.get('warehouse'))
     dispatched += 1
     ctx.call_remote_async(operator_name = 'marketplace', function_name = 'dispatch_all_pending_step_2', key = ctx.key, params = ({'__loop_index_1': __loop_index_1, 'dispatched': dispatched, 'order_ids': order_ids, 'warehouse': warehouse}, None, reply_to))
+

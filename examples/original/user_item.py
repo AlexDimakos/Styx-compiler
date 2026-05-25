@@ -97,6 +97,15 @@ class User:
             item.update_stock(-1)
             total += 1
         return total
+    
+    def discounted_sum(self, items: list[Item], threshold: int) -> int:
+        if not items:
+            return 0
+        price = items[0].get_price()
+        rest = self.discounted_sum(items[1:], threshold)
+        if price > threshold:
+            return rest + int(price * 0.9)
+        return rest + price
 
 
     def bulk_purchase_with_tiers(self, cart: list[Item], quantities: list[int]) -> str:
@@ -132,7 +141,7 @@ class User:
         return "Bulk purchase complete. Remaining balance: " + str(self.balance)
 
     def inventory_value(self) -> int:
-        return sum(item.get_price() for item in self.myitems if item.get_price() > 20)
+        return sum([item.get_price() for item in self.myitems if item.get_price() > 20])
 
     def my_item_prices(self) -> list[int]:
         return [item.get_price() for item in self.myitems]
@@ -233,10 +242,10 @@ class User:
     def most_valuable_item_price(self) -> int:
         if not self.myitems:
             return 0
-        return max(item.get_price() for item in self.myitems)
+        return max([item.get_price() for item in self.myitems])
 
     def can_afford_cart(self, items: list[Item]) -> bool:
-        total = sum(item.get_price() for item in items)
+        total = sum([item.get_price() for item in items])
         return self.balance >= total
 
     def group_items_by_price_bucket(self, items: list[Item]) -> dict:

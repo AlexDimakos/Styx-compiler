@@ -586,7 +586,7 @@ class Marketplace:
     ) -> int:
 
         product_id = product.get_product_id()
-        has_purchased = any(product_id in order_id for order_id in customer.get_order_history())
+        has_purchased = any([product_id in order_id for order_id in customer.get_order_history()])
         if not has_purchased:
             raise Exception("Customer cannot review a product they haven't purchased.")
 
@@ -608,7 +608,7 @@ class Marketplace:
 
     def total_wishlist_value(self, customer: Customer, products: list[Product]) -> int:
         wishlist = customer.get_wishlist()
-        total = sum(p.get_price() for p in products if p.get_product_id() in wishlist)
+        total = sum([p.get_price() for p in products if p.get_product_id() in wishlist])
         return total
 
     def suspend_seller_and_deactivate_products(
@@ -711,8 +711,8 @@ class Marketplace:
 
     def total_platform_earnings_from_sellers(self, sellers: list[Seller]) -> int:
         total = sum(
-            (s.get_revenue() * self.platform_fee_percent) // 100
-            for s in sellers
+            [(s.get_revenue() * self.platform_fee_percent) // 100
+            for s in sellers]
         )
         return total
 
@@ -778,10 +778,10 @@ class Marketplace:
         products: list[Product],
         warehouses: list[Warehouse],
     ) -> str:
-        total_seller_balance = sum(s.get_balance() for s in sellers)
-        total_customer_balance = sum(c.get_balance() for c in customers)
+        total_seller_balance = sum([s.get_balance() for s in sellers])
+        total_customer_balance = sum([c.get_balance() for c in customers])
         active_products = [p for p in products if p.is_available()]
-        avg_stock = sum(p.get_stock() for p in active_products)
+        avg_stock = sum([p.get_stock() for p in active_products])
         warehouse_fill_rates = [w.calculate_fill_rate() for w in warehouses]
         avg_fill = sum(warehouse_fill_rates) // len(warehouse_fill_rates) if warehouse_fill_rates else 0
 
@@ -856,7 +856,7 @@ class Marketplace:
         self, customer: Customer, products: list[Product]
     ) -> int:
         cart = customer.get_cart()
-        total = sum(p.get_price() for p in products if p.get_product_id() in cart)
+        total = sum([p.get_price() for p in products if p.get_product_id() in cart])
         return total
 
     def rebalance_warehouses(
@@ -917,7 +917,7 @@ class Marketplace:
         self, sellers: list[Seller], products: list[Product]
     ) -> list[int]:
         return [
-            sum(p.get_price() for p in products if p.get_seller() == s)
+            sum([p.get_price() for p in products if p.get_seller() == s])
             for s in sellers
         ]
 

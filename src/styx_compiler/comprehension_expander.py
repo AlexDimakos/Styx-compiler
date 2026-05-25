@@ -20,6 +20,38 @@ def find_gather_spread_comps(node: cst.CSTNode) -> set[int]:
     return skip
 
 
+def _genexp_contains_remote_call(genexp: cst.GeneratorExp, entities: dict[str, str]) -> bool:
+    for call in m.findall(genexp, m.Call()):
+        if isinstance(call.func, cst.Name) and call.func.value in entities:
+            return True
+        if isinstance(call.func, cst.Attribute):
+            return True
+    return False
+
+
+def _check_unsupported_genexps(stmt: cst.CSTNode, entities: dict[str, str], skip_ids: set[int]) -> None:
+    """Raise if `stmt` contains a generator expression with a remote call.
+
+    Generator expressions with remote calls would need to be sliced into
+    continuation steps while preserving lazy evaluation — not yet supported.
+
+    TODO: add support for generator expressions. The lazy semantics mean we
+    cannot just expand them into an accumulator + for-loop the way we do for
+    list/set/dict comprehensions, we need a step-by-step evaluation model that
+    suspends at each yield across remote-call boundaries.
+    """
+    for genexp in m.findall(stmt, m.GeneratorExp()):
+        if id(genexp) in skip_ids:
+            continue
+        if _genexp_contains_remote_call(genexp, entities):
+            msg = (
+                "Generator expressions with remote calls are not currently supported. "
+                "Rewrite as a list/set/dict comprehension or an explicit for-loop, "
+                "or use `gather(*<genexp>)` for parallel fan-out."
+            )
+            raise NotImplementedError(msg)
+
+
 class OutermostCompFinder(cst.CSTVisitor):
     """Finds the first (outermost) comprehension in a node to preserve nested scoping."""
 
@@ -44,8 +76,7 @@ class OutermostCompFinder(cst.CSTVisitor):
     def visit_DictComp(self, node: cst.DictComp) -> bool:
         return self._check_and_stop(node)
 
-    def visit_GeneratorExp(self, node: cst.GeneratorExp) -> bool:
-        return self._check_and_stop(node)
+    # GeneratorExp is not currently supported due to its lazy evaluation.
 
     def visit_FunctionDef(self, _node: cst.FunctionDef) -> bool:
         return False
@@ -73,9 +104,6 @@ class TargetedReplacer(cst.CSTTransformer):
     def visit_DictComp(self, node: cst.DictComp) -> bool:
         return node is not self.target
 
-    def visit_GeneratorExp(self, node: cst.GeneratorExp) -> bool:
-        return node is not self.target
-
     def visit_FunctionDef(self, _node: cst.FunctionDef) -> bool:
         return False
 
@@ -97,12 +125,6 @@ class TargetedReplacer(cst.CSTTransformer):
     def leave_DictComp(self, original_node: cst.DictComp, updated_node: cst.DictComp) -> cst.BaseExpression:
         if original_node is self.target:
             self.hoisted.extend(_build_dict_comp_loop(self.var_name, original_node))
-            return cst.Name(self.var_name)
-        return updated_node
-
-    def leave_GeneratorExp(self, original_node: cst.GeneratorExp, updated_node: cst.GeneratorExp) -> cst.BaseExpression:
-        if original_node is self.target:
-            self.hoisted.extend(_build_list_comp_loop(self.var_name, original_node))
             return cst.Name(self.var_name)
         return updated_node
 
@@ -162,6 +184,7 @@ class ComprehensionExpander(cst.CSTTransformer):
             for stmt in current_body:
                 # `gather(*<comp>)` keeps its comp intact for runtime fan-out.
                 skip_ids = find_gather_spread_comps(stmt)
+                _check_unsupported_genexps(stmt, self.entities, skip_ids)
                 finder = OutermostCompFinder(skip_ids=skip_ids)
                 stmt.visit(finder)
 
@@ -210,7 +233,7 @@ def _build_for_chain(for_in: cst.CompFor, innermost_body: list[cst.BaseStatement
     )
 
 
-def _build_list_comp_loop(var: str, node: cst.ListComp | cst.GeneratorExp) -> list[cst.BaseStatement]:
+def _build_list_comp_loop(var: str, node: cst.ListComp) -> list[cst.BaseStatement]:
     init = cst.parse_statement(f"{var} = []")
     append = cst.SimpleStatementLine(
         body=[
