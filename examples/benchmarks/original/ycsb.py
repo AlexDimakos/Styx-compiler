@@ -27,12 +27,10 @@ class YCSB:
         self.value += 1
         return self, self.value
 
-    def update_t(self) -> None:
-        self.value += 1
 
     def transfer(self, key_b: YCSB) -> tuple[YCSB, int]:
 
-        send_async(key_b.update_t())
+        send_async(key_b.update())
 
         self.value -= 1
         if self.value < 0:
