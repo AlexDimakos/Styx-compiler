@@ -68,6 +68,10 @@ def init_gather_barrier(ctx: StatefulFunction, total: int, saved: dict, parent_r
 def update_gather_barrier(ctx: StatefulFunction, barrier_id: str, tag, result):
     ctx_dict = ctx.get_func_context() or {}
     barrier = ctx_dict[barrier_id]
+    if barrier["total"] == 0:
+        ctx_dict.pop(barrier_id)
+        ctx.put_func_context(ctx_dict)
+        return True, (), barrier["saved"], barrier["parent_reply_to"]
     barrier["pending"][tag] = result
     if len(barrier["pending"]) == barrier["total"]:
         ctx_dict.pop(barrier_id)
@@ -775,7 +779,7 @@ async def multi_restock(ctx: StatefulFunction, items: list[str], amounts: list[i
 async def multi_restock_step_2(ctx: StatefulFunction, func_context, placeholder_return = None, reply_to: list = None):
     params = resolve_context(ctx, func_context)
     (__loop_index_1, amounts, items, total_added) = (params.get('__loop_index_1'), params.get('amounts'), params.get('items'), params.get('total_added'))
-    if __loop_index_1 >= len(items):
+    if __loop_index_1 >= min(len(items), len(amounts)):
         ctx.call_remote_async(operator_name = 'user', function_name = 'multi_restock_step_3', key = ctx.key, params = ({'__loop_index_1': __loop_index_1, 'amounts': amounts, 'items': items, 'total_added': total_added}, None, reply_to))
     else:
         item = items[__loop_index_1]
@@ -1082,7 +1086,7 @@ async def gather_in_loop(ctx: StatefulFunction, items: list[str], coupons: list[
 async def gather_in_loop_step_2(ctx: StatefulFunction, func_context, placeholder_return = None, reply_to: list = None):
     params = resolve_context(ctx, func_context)
     (__loop_index_1, coupons, items, total) = (params.get('__loop_index_1'), params.get('coupons'), params.get('items'), params.get('total'))
-    if __loop_index_1 >= len(items):
+    if __loop_index_1 >= min(len(items), len(coupons)):
         ctx.call_remote_async(operator_name = 'user', function_name = 'gather_in_loop_step_3', key = ctx.key, params = ({'__loop_index_1': __loop_index_1, 'coupons': coupons, 'items': items, 'total': total}, None, reply_to))
     else:
         item = items[__loop_index_1]
@@ -1120,10 +1124,14 @@ async def inventory_value_gather(ctx: StatefulFunction, reply_to: list = None) -
     __state__ = ctx.get() or {}
     _g_iter = list(__state__['myitems'])
     _gather_id = init_gather_barrier(ctx, len(_g_iter), {}, reply_to)
-    for (_g_tag, item) in enumerate(_g_iter):
-        _g_reply = [{'op_name': 'user', 'fun': 'inventory_value_gather_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': _g_tag}}]
+    if len(_g_iter) == 0:
         ctx.put(__state__)
-        ctx.call_remote_async(operator_name = 'item', function_name = 'get_price', key = item, params = (_g_reply,))
+        ctx.call_remote_async(operator_name = 'user', function_name = 'inventory_value_gather_step_2', key = ctx.key, params = ({'_g_barrier': _gather_id, '_g_tag': 0}, None, None))
+    else:
+        for (_g_tag, item) in enumerate(_g_iter):
+            _g_reply = [{'op_name': 'user', 'fun': 'inventory_value_gather_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': _g_tag}}]
+            ctx.put(__state__)
+            ctx.call_remote_async(operator_name = 'item', function_name = 'get_price', key = item, params = (_g_reply,))
     ctx.put(__state__)
 
 @user_operator.register
@@ -1136,4 +1144,43 @@ async def inventory_value_gather_step_2(ctx: StatefulFunction, func_context, _ga
     reply_to = parent_reply_to
     prices = _g_results
     return send_reply(ctx, reply_to, sum(list(prices)))
+
+
+@user_operator.register
+async def reference_test(ctx: StatefulFunction, item: str, reply_to: list = None) -> list[int]:
+    list_1 = [1, 2, 3]
+    list_2 = list_1
+    list_2.append(4)
+    reply_to = push_continuation(ctx, reply_to, 'user', 'reference_test_step_2', ctx.key, {'list_1': list_1, 'list_2': list_2})
+    ctx.call_remote_async(operator_name = 'item', function_name = 'get_price', key = item, params = (reply_to,))
+
+@user_operator.register
+async def reference_test_step_2(ctx: StatefulFunction, func_context, placeholder_return = None, reply_to: list = None):
+    params = resolve_context(ctx, func_context)
+    (list_1, list_2) = (params.get('list_1'), params.get('list_2'))
+    list_2.append(5)
+    list_1.append(6)
+    return send_reply(ctx, reply_to, list_1)
+
+
+@user_operator.register
+async def price_check(ctx: StatefulFunction, a: str, b: str, coupon: str, reply_to: list = None) -> int:
+    _gather_id = init_gather_barrier(ctx, 3, {}, reply_to)
+    _g_reply_0 = [{'op_name': 'user', 'fun': 'price_check_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': 0}}]
+    ctx.call_remote_async(operator_name = 'item', function_name = 'get_price', key = a, params = (_g_reply_0,))
+    _g_reply_1 = [{'op_name': 'user', 'fun': 'price_check_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': 1}}]
+    ctx.call_remote_async(operator_name = 'item', function_name = 'get_price', key = b, params = (_g_reply_1,))
+    _g_reply_2 = [{'op_name': 'user', 'fun': 'price_check_step_2', 'id': ctx.key, 'context': {'_g_barrier': _gather_id, '_g_tag': 2}}]
+    ctx.call_remote_async(operator_name = 'coupon', function_name = 'get_discount', key = coupon, params = (_g_reply_2,))
+
+@user_operator.register
+async def price_check_step_2(ctx: StatefulFunction, func_context, _gather_partial = None, reply_to: list = None):
+    barrier_id = func_context['_g_barrier']
+    _g_tag = func_context['_g_tag']
+    (is_complete, _g_results, saved, parent_reply_to) = update_gather_barrier(ctx, barrier_id, _g_tag, _gather_partial)
+    if not is_complete:
+        return
+    reply_to = parent_reply_to
+    pa, pb, d = _g_results
+    return send_reply(ctx, reply_to, max(pa + pb - d, 0))
 

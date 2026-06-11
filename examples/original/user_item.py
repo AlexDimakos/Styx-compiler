@@ -295,3 +295,22 @@ class User:
 
         prices = gather(*[item.get_price() for item in self.myitems])
         return sum(list(prices))
+    
+    def reference_test(self, item: Item) -> list[int]:
+
+        list_1 = [1, 2, 3]
+
+        list_2 = list_1
+
+        list_2.append(4)
+
+        item.get_price()
+
+        list_2.append(5)
+        list_1.append(6)
+
+        return list_1
+
+    def price_check(self, a: Item, b: Item, coupon: Coupon) -> int:
+        pa, pb, d = gather(a.get_price(), b.get_price(), coupon.get_discount())
+        return max(pa + pb - d, 0)

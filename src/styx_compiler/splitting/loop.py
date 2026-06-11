@@ -8,7 +8,7 @@ NOTE while loops that have remote calls in the condition are translated to while
 
 Four iterator shapes are currently supported for `for`:
     - `for x in range(n)` and `for x in range(start, stop)` → bounds via range args
-    - `for a, b in zip(xs, ys)` → bound = len(xs); per-iteration assigns a = xs[i], b = ys[i]
+    - `for a, b in zip(xs, ys)` → bound = min(len(xs), len(ys)); per-iteration assigns a = xs[i], b = ys[i]
     - `for x in items` → bound = len(items); x = items[i]
     - `for i, x in enumerate(items)` → bound = len(items); i = idx[+start]; x = items[idx]
 """
@@ -196,9 +196,13 @@ def _build_for_iter(
         ]
         loop_var_name, extra_loop_vars = idx_name, [val_name]
     elif is_zip_iter:
-        # for a, b in zip(xs, ys): bound = len(xs); a = xs[i]; b = ys[i]
+        # for a, b in zip(xs, ys): bound = min(len(xs), len(ys)); a = xs[i]; b = ys[i]
         zip_args = [arg.value for arg in iter_node.args]
-        bound_expr = cst.Call(func=cst.Name("len"), args=[cst.Arg(value=zip_args[0])])
+        len_calls = [cst.Call(func=cst.Name("len"), args=[cst.Arg(value=arg)]) for arg in zip_args]
+        if len(len_calls) == 1:
+            bound_expr = len_calls[0]
+        else:
+            bound_expr = cst.Call(func=cst.Name("min"), args=[cst.Arg(value=lc) for lc in len_calls])
 
         init_iter = assign_stmt(cst.Name(iter_var_name), cst.Integer("0"))
         ctx.defined_vars.add(iter_var_name)
