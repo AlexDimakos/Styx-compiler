@@ -342,6 +342,12 @@ wheels = [
 ]
 
 [[package]]
+name = "immutables"
+version = "0.21"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/41/0ccaa6ef9943c0609ec5aa663a3b3e681c1712c1007147b84590cec706a0/immutables-0.21.tar.gz", hash = "sha256:b55ffaf0449790242feb4c56ab799ea7af92801a0a43f9e2f4f8af2ab24dfc4a", size = 89008, upload-time = "2024-10-10T00:55:01.434Z" }
+
+[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -446,6 +452,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/83/ce/24d7d49478ffb61207f229239879845da40a374965874f5ee60f96b02ddb/libcst-1.8.6-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:6a65f844d813ab4ef351443badffa0ae358f98821561d19e18b3190f59e71996", size = 2392605, upload-time = "2025-11-03T22:33:12.962Z" },
     { url = "https://files.pythonhosted.org/packages/39/c3/829092ead738b71e96a4e96896c96f276976e5a8a58b4473ed813d7c962b/libcst-1.8.6-cp314-cp314t-win_amd64.whl", hash = "sha256:bdb14bc4d4d83a57062fed2c5da93ecb426ff65b0dc02ddf3481040f5f074a82", size = 2181581, upload-time = "2025-11-03T22:33:14.514Z" },
     { url = "https://files.pythonhosted.org/packages/98/6d/5d6a790a02eb0d9d36c4aed4f41b277497e6178900b2fa29c35353aa45ed/libcst-1.8.6-cp314-cp314t-win_arm64.whl", hash = "sha256:819c8081e2948635cab60c603e1bbdceccdfe19104a242530ad38a36222cb88f", size = 2065000, upload-time = "2025-11-03T22:33:16.257Z" },
+]
+
+[[package]]
+name = "libcst-dfa"
+version = "0.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "immutables" },
+    { name = "libcst" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7d/11/624a418d6ba2e686a158459dc31416ff191d94308c254c5e7219a1555898/libcst_dfa-0.0.1.tar.gz", hash = "sha256:6054255c951cf7a3813e23ae179591767ea9ae3dcadf656dd26f4336acfdfe7d", size = 87271, upload-time = "2026-06-09T14:31:22.958Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/90/39/b62afe5d64c3ee346c19e1dba56ee3ddfd9b28a6bfb6fe24835b2f4069e8/libcst_dfa-0.0.1-py3-none-any.whl", hash = "sha256:056bcec83ef8022de554a9392b5b0553b0c99a8edc99cc8dfd28612b262603e6", size = 15813, upload-time = "2026-06-09T14:31:24.081Z" },
 ]
 
 [[package]]
@@ -1040,6 +1059,7 @@ name = "styx-compiler"
 source = { editable = "." }
 dependencies = [
     { name = "libcst" },
+    { name = "libcst-dfa" },
     { name = "libcst-mypy" },
     { name = "mypy" },
 ]
@@ -1058,6 +1078,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "libcst", specifier = ">=1.8.6" },
+    { name = "libcst-dfa", specifier = ">=0.0.1" },
     { name = "libcst-mypy", specifier = ">=0.1.0" },
     { name = "mypy", specifier = ">=1.19.1" },
 ]

@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "libcst>=1.8.6",
+    "libcst-dfa>=0.0.1",
     "libcst-mypy>=0.1.0",
     "mypy>=1.19.1",
 ]

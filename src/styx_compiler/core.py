@@ -12,12 +12,12 @@ import libcst as cst
 import libcst.matchers as m
 import mypy.api
 from libcst import CSTNode, FlattenSentinel, FunctionDef, Module, RemovalSentinel
+from libcst_dfa.live_variables import LiveVariablesProvider
 from libcst_mypy import MypyTypeInferenceProvider
 from libcst_mypy.utils import MypyType
 
 from styx_compiler.comprehension_expander import ComprehensionExpander
 from styx_compiler.config import N_PARTITIONS
-from styx_compiler.live_variables import LiveVariablesProvider
 from styx_compiler.processor import FunctionProcessor
 from styx_compiler.transformers import (
     EntityTypeReplacer,

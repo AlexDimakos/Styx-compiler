@@ -8,6 +8,7 @@ from collections.abc import Mapping
 
 import libcst as cst
 from libcst import matchers as m
+from libcst_dfa.data_flow import ImmutableSet
 
 
 class LivenessHelper:
@@ -22,16 +23,16 @@ class LivenessHelper:
             return str(v.name).split(".")[-1]
         return str(v).split(".")[-1] if "." in str(v) else str(v)
 
-    def _live_set(self, node: cst.CSTNode | None, kind: str) -> frozenset | None:
+    def _live_set(self, node: cst.CSTNode | None, kind: str) -> ImmutableSet | None:
         if not self.live_vars or node is None:
             return None
         data = self.live_vars.get(node)
         if data is None:
             return None
         val = data[0] if kind == "in" else data[1]
-        return val if isinstance(val, frozenset) else None
+        return val if isinstance(val, ImmutableSet) else None
 
-    def live_out(self, stmt: cst.CSTNode) -> frozenset | None:
+    def live_out(self, stmt: cst.CSTNode) -> ImmutableSet | None:
         """Live-out set for a statement, or None if no liveness data."""
         if isinstance(stmt, cst.SimpleStatementLine) and stmt.body:
             element = stmt.body[0]
