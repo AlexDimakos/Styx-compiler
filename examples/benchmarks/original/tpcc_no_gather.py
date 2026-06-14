@@ -120,13 +120,12 @@ class District:
         send_async(Order(w_id, d_id, d_next_o_id, c_id, o_entry_d, None, len(i_ids), all_local))
         send_async(NewOrder(w_id, d_id, d_next_o_id))
 
-        item_replies = gather(*[
+        item_replies = [
             i_ids[i].get_item(i, w_id, d_id, o_entry_d, i_qtys[i], i_w_ids[i], d_next_o_id)
             for i in range(len(i_ids))
-        ])
+        ]
 
         self.D_NEXT_O_ID += 1
-
 
         data = {
             'D_ID': self.D_ID, 'D_W_ID': self.D_W_ID, 'D_NAME': self.D_NAME,
@@ -560,11 +559,10 @@ class NewOrderTxn:
         customer = get_entity_by_key(Customer, (w_id, d_id, c_id))
 
 
-        warehouse_data, district_bundle, customer_data = gather(
-            w_id.get_warehouse(),
-            district.get_district(w_id, d_id, c_id, o_entry_d, i_ids, i_qtys, i_w_ids, all_local),
-            customer.get_customer(),
-        )
+        warehouse_data = w_id.get_warehouse()
+        district_bundle = district.get_district(w_id, d_id, c_id, o_entry_d, i_ids, i_qtys, i_w_ids, all_local)
+        customer_data = customer.get_customer()
+
         district_data = district_bundle['district']
         item_replies = district_bundle['items']
 
@@ -652,9 +650,9 @@ class PaymentTxn:
 
         district = get_entity_by_key(District, (w_id, d_id))
 
-        customer_data, district_data, warehouse_data = gather(
-            self.get_customer_data(c_last), district.pay(h_amount), w_id.pay(h_amount)
-        )
+        customer_data = self.get_customer_data(c_last)
+        district_data = district.pay(h_amount)
+        warehouse_data = w_id.pay(h_amount)
 
         # Build history record and persist it.
         h_data = f"{warehouse_data['W_NAME']}    {district_data['D_NAME']}"

@@ -227,7 +227,28 @@ def _build_spread_dispatch(
         iter=loop_iter,
         body=cst.IndentedBlock(body=[reply_assign, async_call]),
     )
-    return [materialize_stmt, init_stmt, dispatch_loop]
+
+    # Empty iterable → zero dispatches → nothing would ever call
+    # update_gather_barrier, so the join (and thus the reply) never fires.
+    # Fire a single self-call to the join; the total==0 barrier resolves it
+    # immediately with empty results.
+    empty_context = dict_from_pairs([("_g_barrier", cst.Name("_gather_id")), ("_g_tag", cst.Integer("0"))])
+    empty_call = call_remote_async_stmt(
+        reply_op_name,
+        join_name,
+        CTX_KEY,
+        params_with_reply_to([empty_context, cst.Name("None")], cst.Name("None")),
+    )
+    is_empty = cst.Comparison(
+        left=cst.Call(func=cst.Name("len"), args=[cst.Arg(value=cst.Name("_g_iter"))]),
+        comparisons=[cst.ComparisonTarget(operator=cst.Equal(), comparator=cst.Integer("0"))],
+    )
+    guard = cst.If(
+        test=is_empty,
+        body=cst.IndentedBlock(body=[empty_call]),
+        orelse=cst.Else(body=cst.IndentedBlock(body=[dispatch_loop])),
+    )
+    return [materialize_stmt, init_stmt, guard]
 
 
 def _build_join_body(

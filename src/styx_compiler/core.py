@@ -37,6 +37,23 @@ def _uses_state(node: cst.CSTNode) -> bool:
     return any(_uses_state(child) for child in node.children)
 
 
+def _is_gather_join(func: cst.FunctionDef) -> bool:
+    """Gather-join continuations are emitted with a `_gather_partial` parameter."""
+    return any(p.name.value == "_gather_partial" for p in func.params.params)
+
+
+def _gather_state_load_index(func: cst.FunctionDef, body_list: list) -> int:
+    """Where to insert `__state__ = ctx.get() or {}` in a step body so that we don't
+    create many deep copies of the state before all results are collected."""
+
+    if not _is_gather_join(func):
+        return 0
+    for idx, stmt in enumerate(body_list):
+        if isinstance(stmt, cst.If):
+            return idx + 1
+    return 0
+
+
 class StyxTransformer(cst.CSTTransformer):
     """
     Main transformer that processes entity classes and converts them to Styx operators.
@@ -141,6 +158,10 @@ def init_gather_barrier(ctx: StatefulFunction, total: int, saved: dict, parent_r
 def update_gather_barrier(ctx: StatefulFunction, barrier_id: str, tag, result):
     ctx_dict = ctx.get_func_context() or {}
     barrier = ctx_dict[barrier_id]
+    if barrier["total"] == 0:
+        ctx_dict.pop(barrier_id)
+        ctx.put_func_context(ctx_dict)
+        return True, (), barrier["saved"], barrier["parent_reply_to"]
     barrier["pending"][tag] = result
     if len(barrier["pending"]) == barrier["total"]:
         ctx_dict.pop(barrier_id)
@@ -300,9 +321,10 @@ def update_gather_barrier(ctx: StatefulFunction, barrier_id: str, tag, result):
             # `or {}` covers the fresh-key case (e.g. method called before any insert).
             if _uses_state(transformed_func) and not (is_init and is_root):
                 get_state = cst.parse_statement("__state__ = ctx.get() or {}")
-                transformed_func = transformed_func.with_changes(
-                    body=cst.IndentedBlock(body=[get_state, *list(transformed_func.body.body)])
-                )
+                body_list = list(transformed_func.body.body)
+                insert_at = _gather_state_load_index(transformed_func, body_list)
+                body_list.insert(insert_at, get_state)
+                transformed_func = transformed_func.with_changes(body=cst.IndentedBlock(body=body_list))
 
             transformed_func = transformed_func.visit(
                 ReturnHandlerTransformer(uses_state=_uses_state(transformed_func))
